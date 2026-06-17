@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const COBALT_INSTANCE =
-  process.env.COBALT_INSTANCE || 'https://api.cobalt.tools'
-
 export async function POST(req: NextRequest) {
   try {
     const { url, quality } = await req.json()
@@ -13,60 +10,66 @@ export async function POST(req: NextRequest) {
 
     const isAudio = quality === 'audio'
 
-    const qualityMap: Record<string, string> = {
-      max: 'max',
-      '1080': '1080',
-      '720': '720',
-      '480': '480',
-      audio: 'max',
+    // Try multiple public Cobalt instances
+    const instances = [
+      'https://api.cobalt.tools',
+      'https://cobalt.api.xunn.at',
+      'https://cobalt.urdailyneeds.com',
+    ]
+
+    let data = null
+    let success = false
+
+    for (const instance of instances) {
+      try {
+        const res = await fetch(`${instance}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            url,
+            videoQuality: quality === 'max' ? 'max' : quality,
+            downloadMode: isAudio ? 'audio' : 'auto',
+            audioFormat: 'mp3',
+            filenameStyle: 'pretty',
+          }),
+        })
+
+        if (res.ok) {
+          data = await res.json()
+          if (data.status !== 'error') {
+            success = true
+            break
+          }
+        }
+      } catch {
+        continue
+      }
     }
 
-    const cobaltRes = await fetch(`${COBALT_INSTANCE}/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        url: url,
-        videoQuality: qualityMap[quality] || 'max',
-        downloadMode: isAudio ? 'audio' : 'auto',
-        audioFormat: 'mp3',
-        filenameStyle: 'pretty',
-      }),
-    })
-
-    const data = await cobaltRes.json()
-
-    if (!cobaltRes.ok || data.status === 'error') {
+    if (!success || !data) {
       return NextResponse.json(
-        { error: data.error?.code || 'Could not fetch video. Check the URL.' },
+        { error: 'All servers busy. Try again in a moment.' },
         { status: 500 }
       )
     }
 
     if (data.status === 'redirect' || data.status === 'tunnel') {
-      return NextResponse.json({
-        url: data.url,
-        filename: data.filename || 'video.mp4',
-      })
+      return NextResponse.json({ url: data.url, filename: data.filename || 'video.mp4' })
     }
 
     if (data.status === 'picker') {
-      return NextResponse.json({
-        url: data.picker[0]?.url,
-        filename: 'video.mp4',
-      })
+      return NextResponse.json({ url: data.picker[0]?.url, filename: 'video.mp4' })
     }
 
     return NextResponse.json(
-      { error: 'Unexpected response. Try a different URL.' },
+      { error: 'Could not process this URL. Try another.' },
       { status: 500 }
     )
+
   } catch {
-    return NextResponse.json(
-      { error: 'Server error. Try again later.' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Server error. Try again.' }, { status: 500 })
   }
 }
