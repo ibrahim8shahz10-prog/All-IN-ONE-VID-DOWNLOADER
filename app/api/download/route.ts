@@ -27,8 +27,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         url: url,
         videoQuality: qualityMap[quality] || '1080',
-        downloadMode: isAudio ? 'audio' : 'video',
-        filenameStyle: 'pretty', // FIXED: Changed from filenamePattern to filenameStyle
+        downloadMode: isAudio ? 'audio' : 'auto', // FIXED: 'auto' is used for standard video downloads instead of 'video'
+        filenameStyle: 'pretty',
       }),
     })
 
