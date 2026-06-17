@@ -10,7 +10,6 @@ export async function POST(req: NextRequest) {
 
     const isAudio = quality === 'audio'
 
-    // Modern Cobalt API accepts these specific videoQuality strings
     const qualityMap: Record<string, string> = {
       max: 'max',
       '1080': '1080',
@@ -19,8 +18,6 @@ export async function POST(req: NextRequest) {
       audio: 'max',
     }
 
-    // Modern API uses the root path '/' instead of the deprecated '/api/json'
-    // Update the base URL below if you are using a specific custom/self-hosted instance
     const cobaltRes = await fetch('https://api.cobalt.tools/', {
       method: 'POST',
       headers: {
@@ -31,11 +28,10 @@ export async function POST(req: NextRequest) {
         url: url,
         videoQuality: qualityMap[quality] || '1080',
         downloadMode: isAudio ? 'audio' : 'video',
-        filenamePattern: 'pretty',
+        filenameStyle: 'pretty', // FIXED: Changed from filenamePattern to filenameStyle
       }),
     })
 
-    // Handle standard HTTP error statuses returned by modern Cobalt instances
     if (!cobaltRes.ok) {
       try {
         const errorData = await cobaltRes.json()
@@ -45,16 +41,14 @@ export async function POST(req: NextRequest) {
         )
       } catch {
         return NextResponse.json(
-          { error: `Cobalt service returned an error status: ${cobaltRes.status}` },
-          { status: 500 }
+          { error: `Cobalt error status: ${cobaltRes.status}` },
+          { status: cobaltRes.status }
         )
       }
     }
 
     const data = await cobaltRes.json()
 
-    // Handle generic status types ('redirect', 'stream', 'tunnel') 
-    // where a direct url is provided in the top-level response
     if (data.status === 'redirect' || data.status === 'stream' || data.status === 'tunnel') {
       return NextResponse.json({
         url: data.url,
@@ -62,16 +56,13 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Handle 'picker' status type (e.g., multiple images/videos from TikTok or gallery posts)
     if (data.status === 'picker') {
       return NextResponse.json({
         url: data.picker?.[0]?.url || null,
         filename: data.picker?.[0]?.filename || 'media.mp4',
-        picker: data.picker, // Forward all items if the frontend wants to display a gallery selector
       })
     }
 
-    // Handle direct status fallbacks if 'status' isn't explicitly mapped but a url is returned
     if (data.url) {
       return NextResponse.json({
         url: data.url,
@@ -80,7 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'Unexpected response format from Cobalt. Try another URL.' },
+      { error: 'Unexpected response format from Cobalt.' },
       { status: 500 }
     )
 
