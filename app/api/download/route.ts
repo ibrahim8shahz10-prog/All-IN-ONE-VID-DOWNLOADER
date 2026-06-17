@@ -8,7 +8,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No URL provided.' }, { status: 400 })
     }
 
-    // Map quality to Cobalt params
+    const isAudio = quality === 'audio'
+
     const qualityMap: Record<string, string> = {
       max: '9000',
       '1080': '1080',
@@ -17,9 +18,7 @@ export async function POST(req: NextRequest) {
       audio: '9000',
     }
 
-    const isAudio = quality === 'audio'
-
-    const cobaltRes = await fetch('https://api.cobalt.tools/', {
+    const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -30,7 +29,6 @@ export async function POST(req: NextRequest) {
         vQuality: qualityMap[quality] || '9000',
         isAudioOnly: isAudio,
         filenamePattern: 'pretty',
-        disableMetadata: false,
       }),
     })
 
@@ -38,12 +36,12 @@ export async function POST(req: NextRequest) {
 
     if (data.status === 'error' || data.status === 'rate-limit') {
       return NextResponse.json(
-        { error: data.text || 'Cobalt API error. Try again.' },
+        { error: data.text || 'Could not fetch video. Check the URL.' },
         { status: 500 }
       )
     }
 
-    if (data.status === 'redirect' || data.status === 'stream') {
+    if (data.status === 'redirect' || data.status === 'stream' || data.status === 'tunnel') {
       return NextResponse.json({
         url: data.url,
         filename: data.filename || 'video.mp4',
@@ -51,14 +49,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (data.status === 'picker') {
-      // Return first option for simplicity
       return NextResponse.json({
         url: data.picker[0]?.url,
         filename: 'video.mp4',
       })
     }
 
-    return NextResponse.json({ error: 'Unexpected response from server.' }, { status: 500 })
+    return NextResponse.json({ error: 'Unexpected response. Try a different URL.' }, { status: 500 })
+
   } catch {
     return NextResponse.json({ error: 'Server error. Try again later.' }, { status: 500 })
   }
