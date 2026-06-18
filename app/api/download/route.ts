@@ -2,49 +2,73 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json()
+    const { url, quality } = await req.json()
 
     if (!url) {
       return NextResponse.json({ error: 'No URL provided.' }, { status: 400 })
     }
 
-    // Detect platform
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be')
     const isTikTok = url.includes('tiktok.com')
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be')
     const isFacebook = url.includes('facebook.com') || url.includes('fb.watch')
     const isInstagram = url.includes('instagram.com')
     const isTwitter = url.includes('twitter.com') || url.includes('x.com')
+    const isSnapchat = url.includes('snapchat.com')
 
-    let apiUrl = ''
-
-    if (isYouTube) {
-      apiUrl = `https://yt-download.org/api/button/mp4?url=${encodeURIComponent(url)}`
-      return NextResponse.json({
-        redirect: true,
-        url: `https://yt1s.com/en/youtube-to-mp4?q=${encodeURIComponent(url)}`,
-        message: 'Opening download page...'
-      })
-    }
-
+    // TikTok — direct API, works from server
     if (isTikTok) {
-      const res = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(url)}`)
+      const res = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`)
       const data = await res.json()
+      if (data.code === 0 && data.data?.hdplay) {
+        return NextResponse.json({ url: data.data.hdplay, filename: 'tiktok-video.mp4' })
+      }
       if (data.code === 0 && data.data?.play) {
-        return NextResponse.json({
-          url: data.data.play,
-          filename: 'tiktok-video.mp4'
-        })
+        return NextResponse.json({ url: data.data.play, filename: 'tiktok-video.mp4' })
       }
     }
 
-    if (isFacebook || isInstagram || isTwitter) {
+    // YouTube — redirect to y2mate
+    if (isYouTube) {
+      const encoded = encodeURIComponent(url)
       return NextResponse.json({
         redirect: true,
-        url: `https://snapvid.app/?url=${encodeURIComponent(url)}`,
+        url: `https://www.y2mate.com/youtube/${encoded}`,
       })
     }
 
-    // Fallback — send to cobalt.tools directly
+    // Facebook — redirect to fdownloader
+    if (isFacebook) {
+      return NextResponse.json({
+        redirect: true,
+        url: `https://fdownloader.net/?url=${encodeURIComponent(url)}`,
+      })
+    }
+
+    // Instagram — redirect to instafinsta
+    if (isInstagram) {
+      return NextResponse.json({
+        redirect: true,
+        url: `https://instafinsta.com/?url=${encodeURIComponent(url)}`,
+      })
+    }
+
+    // Twitter/X
+    if (isTwitter) {
+      return NextResponse.json({
+        redirect: true,
+        url: `https://twittervideodownloader.com/?url=${encodeURIComponent(url)}`,
+      })
+    }
+
+    // Snapchat
+    if (isSnapchat) {
+      return NextResponse.json({
+        redirect: true,
+        url: `https://snapdownloader.com/?url=${encodeURIComponent(url)}`,
+      })
+    }
+
+    // Default fallback
     return NextResponse.json({
       redirect: true,
       url: `https://cobalt.tools`,
