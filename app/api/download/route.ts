@@ -2,72 +2,53 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { url, quality } = await req.json()
+    const { url } = await req.json()
 
     if (!url) {
       return NextResponse.json({ error: 'No URL provided.' }, { status: 400 })
     }
 
-    const isAudio = quality === 'audio'
+    // Detect platform
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be')
+    const isTikTok = url.includes('tiktok.com')
+    const isFacebook = url.includes('facebook.com') || url.includes('fb.watch')
+    const isInstagram = url.includes('instagram.com')
+    const isTwitter = url.includes('twitter.com') || url.includes('x.com')
 
-    // Try multiple public Cobalt instances
-    const instances = [
-      'https://api.cobalt.tools',
-      'https://cobalt.api.xunn.at',
-      'https://cobalt.urdailyneeds.com',
-    ]
+    let apiUrl = ''
 
-    let data = null
-    let success = false
+    if (isYouTube) {
+      apiUrl = `https://yt-download.org/api/button/mp4?url=${encodeURIComponent(url)}`
+      return NextResponse.json({
+        redirect: true,
+        url: `https://yt1s.com/en/youtube-to-mp4?q=${encodeURIComponent(url)}`,
+        message: 'Opening download page...'
+      })
+    }
 
-    for (const instance of instances) {
-      try {
-        const res = await fetch(`${instance}/`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            url,
-            videoQuality: quality === 'max' ? 'max' : quality,
-            downloadMode: isAudio ? 'audio' : 'auto',
-            audioFormat: 'mp3',
-            filenameStyle: 'pretty',
-          }),
+    if (isTikTok) {
+      const res = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(url)}`)
+      const data = await res.json()
+      if (data.code === 0 && data.data?.play) {
+        return NextResponse.json({
+          url: data.data.play,
+          filename: 'tiktok-video.mp4'
         })
-
-        if (res.ok) {
-          data = await res.json()
-          if (data.status !== 'error') {
-            success = true
-            break
-          }
-        }
-      } catch {
-        continue
       }
     }
 
-    if (!success || !data) {
-      return NextResponse.json(
-        { error: 'All servers busy. Try again in a moment.' },
-        { status: 500 }
-      )
+    if (isFacebook || isInstagram || isTwitter) {
+      return NextResponse.json({
+        redirect: true,
+        url: `https://snapvid.app/?url=${encodeURIComponent(url)}`,
+      })
     }
 
-    if (data.status === 'redirect' || data.status === 'tunnel') {
-      return NextResponse.json({ url: data.url, filename: data.filename || 'video.mp4' })
-    }
-
-    if (data.status === 'picker') {
-      return NextResponse.json({ url: data.picker[0]?.url, filename: 'video.mp4' })
-    }
-
-    return NextResponse.json(
-      { error: 'Could not process this URL. Try another.' },
-      { status: 500 }
-    )
+    // Fallback — send to cobalt.tools directly
+    return NextResponse.json({
+      redirect: true,
+      url: `https://cobalt.tools`,
+    })
 
   } catch {
     return NextResponse.json({ error: 'Server error. Try again.' }, { status: 500 })
